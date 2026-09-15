@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: manafy-ops
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/manafyops;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=TRUE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      # Flyway owns schema evolution. Hibernate only VALIDATES the schema matches entities.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  # Flyway — versioned migrations. Dialect-neutral SQL authored for both H2 (dev/test)
+  # and PostgreSQL (staging/prod). No PostgreSQL-native ENUM/CITEXT/pgcrypto in the
+  # shared path (owner decision Q-F1). Postgres-only hardening lives in an optional
+  # prod-profile location.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    placeholders:
+      # Engine UUID-generation function used by the repeatable seed migration.
+      # H2: RANDOM_UUID(); PostgreSQL: gen_random_uuid().
+      uuid_fn: ${DB_UUID_FN:RANDOM_UUID()}
+
+  # NOTE: We intentionally do NOT set spring.security.oauth2.resourceserver.jwt.issuer-uri
+  # here — that would eagerly auto-configure a JwtDecoder and fail startup when no
+  # Cognito pool exists. SecurityConfig reads manafy.cognito.issuer-uri and wires the
+  # decoder only when present.
+
+server:
+  servlet:
+    context-path: /ManafyOpsSvcRst
+  port: 8083
+  forward-headers-strategy: framework
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    root: INFO
+    com.manafy: INFO
+
+manafy:
+  # Amazon Cognito configuration (config-driven; no secrets committed).
+  cognito:
+    region: ${AWS_REGION:}
+    user-pool-id: ${COGNITO_USER_POOL_ID:}
+    app-client-id: ${COGNITO_APP_CLIENT_ID:}
+    issuer-uri: ${COGNITO_ISSUER_URI:}
+  # Super Admin bootstrap (owner decision Q-F4): config-driven promotion of a
+  # specific Cognito `sub`. Never hard-coded, never logged, never returned via API.
+  # Empty by default → no bootstrap occurs. Set per environment via env var.
+  bootstrap:
+    super-admin-sub: ${OPS_BOOTSTRAP_SUPER_ADMIN_SUB:}

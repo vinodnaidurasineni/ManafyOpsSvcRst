@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    # In-memory H2 for tests; Flyway builds the schema fresh each run.
+    url: jdbc:h2:mem:manafyops_test;DB_CLOSE_DELAY=-1;MODE=LEGACY
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    clean-disabled: false
+    locations: classpath:db/migration
+    placeholders:
+      uuid_fn: RANDOM_UUID()
+
+# Cognito NOT configured in tests → no resource-server decoder is wired
+# (SecurityConfig stays authentication-plumbing-only; tests inject principals).
+manafy:
+  cognito:
+    issuer-uri:
+  bootstrap:
+    super-admin-sub:
+
+logging:
+  level:
+    org.flywaydb: INFO
+    com.manafy: INFO
