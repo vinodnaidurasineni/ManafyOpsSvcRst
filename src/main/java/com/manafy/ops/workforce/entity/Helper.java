@@ -33,6 +33,18 @@ public class Helper extends BaseEntity {
     @Column(nullable = false, length = 30)
     private String status = "DRAFT";
 
+    /**
+     * The service this helper performs (MAID | COOK | PLUMBER | ELECTRICIAN |
+     * CLEANER | CARPENTER | OTHER). Mirrors the Community service-type codes so a
+     * request's serviceType matches a helper pool. Nullable for uncategorized rows.
+     */
+    @Column(length = 40)
+    private String category;
+
+    /** AVAILABLE | UNAVAILABLE — whether the helper can currently receive work. */
+    @Column(name = "availability_status", nullable = false, length = 20)
+    private String availabilityStatus = "AVAILABLE";
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -50,6 +62,10 @@ public class Helper extends BaseEntity {
     public void setVendorId(UUID vendorId) { this.vendorId = vendorId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public String getAvailabilityStatus() { return availabilityStatus; }
+    public void setAvailabilityStatus(String availabilityStatus) { this.availabilityStatus = availabilityStatus; }
     public LocalDateTime getDeletedAt() { return deletedAt; }
     public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
 }

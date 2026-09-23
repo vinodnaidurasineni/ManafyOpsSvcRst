@@ -65,3 +65,22 @@ manafy:
   # Empty by default → no bootstrap occurs. Set per environment via env var.
   bootstrap:
     super-admin-sub: ${OPS_BOOTSTRAP_SUPER_ADMIN_SUB:}
+  # Cross-service integration with Community (ManafyCommunitySvcRst).
+  #  - service-token: shared secret Community must present (X-Service-Token) on the
+  #    manual-request INTAKE endpoint, and that Ops presents back on the status
+  #    callback. Dev default matches the Community-side default; every deployed
+  #    environment MUST override both from a secrets store.
+  #  - community-base-url: where Ops posts coarse status/assignment updates so the
+  #    resident sees them. Empty by default → callback is skipped (booking stays
+  #    the durable record; Community can also poll).
+  integration:
+    service-token: ${OPS_SERVICE_TOKEN:manafy-community-ops-shared-secret-dev}
+    community-base-url: ${COMMUNITY_BASE_URL:}
+  # DEV-ONLY local login (no Cognito). Lets the Operations mobile app sign in with
+  # a mobile + fixed OTP against locally-seeded accounts (7000000001..04). DISABLED
+  # by default and automatically inert whenever a real Cognito issuer-uri is set.
+  # NEVER enable this in production.
+  dev-auth:
+    enabled: ${OPS_DEV_AUTH_ENABLED:true}
+    otp: ${OPS_DEV_AUTH_OTP:123456}
+    secret: ${OPS_DEV_AUTH_SECRET:manafy-ops-dev-local-signing-secret-please-change-0123456789}

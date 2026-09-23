@@ -16,7 +16,12 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.util.StringUtils;
+
+import com.manafy.ops.common.security.dev.DevAuthProperties;
+import com.manafy.ops.common.security.dev.DevJwtAuthFilter;
+import com.manafy.ops.common.security.dev.DevJwtService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,12 +46,18 @@ public class SecurityConfig {
 
     private final String cognitoIssuerUri;
     private final String cognitoAppClientId;
+    private final DevAuthProperties devAuthProps;
+    private final DevJwtService devJwtService;
 
     public SecurityConfig(
             @Value("${manafy.cognito.issuer-uri:}") String cognitoIssuerUri,
-            @Value("${manafy.cognito.app-client-id:}") String cognitoAppClientId) {
+            @Value("${manafy.cognito.app-client-id:}") String cognitoAppClientId,
+            DevAuthProperties devAuthProps,
+            DevJwtService devJwtService) {
         this.cognitoIssuerUri = cognitoIssuerUri;
         this.cognitoAppClientId = cognitoAppClientId;
+        this.devAuthProps = devAuthProps;
+        this.devJwtService = devJwtService;
     }
 
     private boolean cognitoConfigured() {
@@ -66,6 +77,11 @@ public class SecurityConfig {
             http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                     jwt.decoder(cognitoJwtDecoder())
                        .jwtAuthenticationConverter(new CognitoJwtAuthenticationConverter())));
+        } else if (devAuthProps.isEnabled()) {
+            // DEV-ONLY: accept locally-minted HS256 tokens when no real Cognito pool
+            // is configured. Never active alongside Cognito, never in production.
+            http.addFilterBefore(new DevJwtAuthFilter(devJwtService),
+                    UsernamePasswordAuthenticationFilter.class);
         }
 
         http.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));

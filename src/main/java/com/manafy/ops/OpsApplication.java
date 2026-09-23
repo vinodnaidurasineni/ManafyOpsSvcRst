@@ -2,6 +2,7 @@ package com.manafy.ops;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * Manafy Operations Platform backend (ManafyOpsSvcRst).
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Cognito = authentication. Manafy PostgreSQL = authorization / source of truth.
  */
 @SpringBootApplication
+@EnableAsync
 public class OpsApplication {
     public static void main(String[] args) {
         SpringApplication.run(OpsApplication.class, args);
