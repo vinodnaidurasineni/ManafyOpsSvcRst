@@ -56,8 +56,10 @@ public final class WorkforceDtos {
                                       @NotNull String relationship, UUID technicianId, UUID vendorId) {}
     public record HelperUpdateRequest(String name, String phone, String relationship,
                                       UUID technicianId, UUID vendorId, Long version) {}
-    public record HelperListItemResponse(UUID id, String code, String name, String relationship, String status) {}
+    public record HelperListItemResponse(UUID id, String code, String name, String phone, String relationship,
+                                         String category, String availabilityStatus, String status) {}
     public record HelperDetailResponse(UUID id, String code, String name, String phone, String relationship,
+                                       String category, String availabilityStatus,
                                        UUID technicianId, UUID vendorId, String status, long version) {}
 
     // ─── Employee / Field Officer ────────────────────────────────────

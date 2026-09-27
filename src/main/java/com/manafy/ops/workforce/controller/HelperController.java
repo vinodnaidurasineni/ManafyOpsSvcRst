@@ -28,6 +28,7 @@ public class HelperController {
 
     private HelperDetailResponse detail(Helper h) {
         return new HelperDetailResponse(h.getId(), h.getCode(), h.getName(), h.getPhone(), h.getRelationship(),
+                h.getCategory(), h.getAvailabilityStatus(),
                 h.getTechnicianId(), h.getVendorId(), h.getStatus(), h.getVersion());
     }
 

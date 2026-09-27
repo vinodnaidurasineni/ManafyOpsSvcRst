@@ -16,4 +16,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
     boolean existsByEmployeeCode(String employeeCode);
     Page<Employee> findByDeletedFalse(Pageable pageable);
     List<Employee> findByEmployeeTypeAndDeletedFalse(String employeeType);
+    long countByStatusAndDeletedFalse(String status);
+    long countByDeletedFalse();
 }
