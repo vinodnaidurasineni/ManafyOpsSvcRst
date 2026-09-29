@@ -28,4 +28,7 @@ public interface HelperRepository extends JpaRepository<Helper, UUID> {
 
     /** All ACTIVE + AVAILABLE helpers (used when no category filter applies). */
     List<Helper> findByStatusAndAvailabilityStatusAndDeletedFalse(String status, String availabilityStatus);
+
+    long countByStatusAndDeletedFalse(String status);
+    long countByDeletedFalse();
 }

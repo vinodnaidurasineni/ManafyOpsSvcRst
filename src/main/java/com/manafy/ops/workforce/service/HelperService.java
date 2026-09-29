@@ -121,7 +121,8 @@ public class HelperService {
         int ps = PageResponse.clampPageSize(pageSize);
         var result = helperRepo.findByDeletedFalse(PageRequest.of(p - 1, ps));
         List<HelperListItemResponse> data = result.getContent().stream()
-                .map(h -> new HelperListItemResponse(h.getId(), h.getCode(), h.getName(), h.getRelationship(), h.getStatus()))
+                .map(h -> new HelperListItemResponse(h.getId(), h.getCode(), h.getName(), h.getPhone(),
+                        h.getRelationship(), h.getCategory(), h.getAvailabilityStatus(), h.getStatus()))
                 .toList();
         return PageResponse.of(data, p, ps, result.getTotalElements());
     }

@@ -20,6 +20,8 @@ import com.manafy.ops.common.authz.repository.RolePermissionRepository;
 import com.manafy.ops.common.authz.repository.RoleRepository;
 import com.manafy.ops.common.authz.repository.UserRoleRepository;
 import com.manafy.ops.common.authz.repository.UserScopeRepository;
+import com.manafy.ops.complaint.entity.OpsComplaint;
+import com.manafy.ops.complaint.repository.OpsComplaintRepository;
 import com.manafy.ops.identity.entity.OpsUser;
 import com.manafy.ops.identity.repository.OpsUserRepository;
 import com.manafy.ops.manualrequest.entity.ManualAssignmentRequest;
@@ -54,10 +56,19 @@ public class DevUserSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DevUserSeeder.class);
 
-    /** Assignment/queue permissions the dev users need for the manual-request flow. */
+    /**
+     * Permissions the dev users need to exercise the full Ops mobile flow end-to-end:
+     * the manual-request queue (ASSIGNMENT_*), the complaints module (COMPLAINT_*),
+     * the workforce/maid directory + onboarding (HELPER_*, EMPLOYEE_*), and the
+     * dashboard customer-count/summary (REPORT_VIEW). Granted to each dev role
+     * (except SUPER_ADMIN, which already holds everything via the catalog seed).
+     */
     private static final List<String> OPERATIONS_PERMISSIONS = List.of(
             "ASSIGNMENT_VIEW", "ASSIGNMENT_CREATE", "ASSIGNMENT_REASSIGN", "ASSIGNMENT_CANCEL",
-            "REGION_VIEW", "AREA_VIEW");
+            "COMPLAINT_VIEW", "COMPLAINT_UPDATE",
+            "HELPER_VIEW", "HELPER_CREATE", "HELPER_UPDATE",
+            "EMPLOYEE_VIEW", "EMPLOYEE_CREATE", "EMPLOYEE_UPDATE",
+            "REPORT_VIEW", "REGION_VIEW", "AREA_VIEW");
 
     /** The dev accounts. Mobile numbers are distinct from the Community app's. */
     public record DevAccount(String mobile, String name, String roleCode) {}
@@ -90,19 +101,22 @@ public class DevUserSeeder implements ApplicationRunner {
     private final RolePermissionRepository rolePermissionRepo;
     private final ManualAssignmentRequestRepository manualRepo;
     private final HelperRepository helperRepo;
+    // maid-app domain (HEAD)
     private final BookingRepository bookingRepo;
     private final BookingScheduleRepository scheduleRepo;
     private final BookingAssignmentRepository assignmentRepo;
-    private final ComplaintRepository complaintRepo;
+    private final ComplaintRepository maidComplaintRepo;
     private final HelperTagRepository helperTagRepo;
+    // ops complaint domain (incoming branch)
+    private final OpsComplaintRepository opsComplaintRepo;
 
     public DevUserSeeder(DevAuthProperties props, OpsUserRepository userRepo, RoleRepository roleRepo,
                          UserRoleRepository userRoleRepo, UserScopeRepository userScopeRepo,
                          PermissionRepository permissionRepo, RolePermissionRepository rolePermissionRepo,
                          ManualAssignmentRequestRepository manualRepo, HelperRepository helperRepo,
                          BookingRepository bookingRepo, BookingScheduleRepository scheduleRepo,
-                         BookingAssignmentRepository assignmentRepo, ComplaintRepository complaintRepo,
-                         HelperTagRepository helperTagRepo) {
+                         BookingAssignmentRepository assignmentRepo, ComplaintRepository maidComplaintRepo,
+                         HelperTagRepository helperTagRepo, OpsComplaintRepository opsComplaintRepo) {
         this.props = props;
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
@@ -115,8 +129,9 @@ public class DevUserSeeder implements ApplicationRunner {
         this.bookingRepo = bookingRepo;
         this.scheduleRepo = scheduleRepo;
         this.assignmentRepo = assignmentRepo;
-        this.complaintRepo = complaintRepo;
+        this.maidComplaintRepo = maidComplaintRepo;
         this.helperTagRepo = helperTagRepo;
+        this.opsComplaintRepo = opsComplaintRepo;
     }
 
     @Override
@@ -137,6 +152,8 @@ public class DevUserSeeder implements ApplicationRunner {
         seedHelpers();
         seedSampleRequests();
         seedWorkloadRequests();
+        // Ops complaints (incoming branch: ops_complaint + /complaints module).
+        seedOpsComplaints();
 
         // Maid-app login accounts (no ops role). Created after helpers so the
         // OpsUser.mobile → Helper.phone link resolves in MaidAppController.
@@ -147,14 +164,14 @@ public class DevUserSeeder implements ApplicationRunner {
         // Sample maid-app jobs so /maids/me/jobs + /dashboard return data.
         seedMaidJobs();
 
-        // Sample complaints so the admin complaints screen has data.
-        seedComplaints();
+        // Sample maid-app complaints (maidapp_complaint + /admin/complaints).
+        seedMaidComplaints();
 
         // Sample helper tags so the admin helper-tags screen has data.
         seedHelperTags();
 
         log.warn("DEV-AUTH ENABLED: seeded {} local login accounts (mobiles 7000000001..04, OTP={}), "
-                + "helper workforce, and sample requests. This must NEVER be enabled in production.",
+                + "helper workforce, sample requests, and sample complaints. This must NEVER be enabled in production.",
                 ACCOUNTS.size(), props.getOtp());
     }
 
@@ -360,17 +377,17 @@ public class DevUserSeeder implements ApplicationRunner {
         assignmentRepo.save(assignment);
     }
 
-    /** Seed a couple of sample complaints (idempotent by description marker). */
-    private void seedComplaints() {
-        if (!complaintRepo.findByDeletedFalseOrderByCreatedAtDesc().isEmpty()) return;
-        complaint("MAID_NO_SHOW", "OPEN", "Maid did not arrive for the morning slot.",
+    /** Seed a couple of sample maid-app complaints (maidapp_complaint). */
+    private void seedMaidComplaints() {
+        if (!maidComplaintRepo.findByDeletedFalseOrderByCreatedAtDesc().isEmpty()) return;
+        maidComplaint("MAID_NO_SHOW", "OPEN", "Maid did not arrive for the morning slot.",
                 "Anita Rao", "9845012345", "Anita Sharma", "9900010001");
-        complaint("WORK_NOT_DONE", "IN_PROGRESS", "Dishes were left unwashed.",
+        maidComplaint("WORK_NOT_DONE", "IN_PROGRESS", "Dishes were left unwashed.",
                 "Rahul Verma", "9845067890", "Priya Das", "9900010002");
     }
 
-    private void complaint(String type, String status, String desc,
-                           String customerName, String customerMobile, String maidName, String maidMobile) {
+    private void maidComplaint(String type, String status, String desc,
+                               String customerName, String customerMobile, String maidName, String maidMobile) {
         Complaint c = new Complaint();
         c.setComplaintType(type);
         c.setComplaintStatus(status);
@@ -380,7 +397,7 @@ public class DevUserSeeder implements ApplicationRunner {
         c.setMaidName(maidName);
         c.setMaidMobile(maidMobile);
         c.setCreatedBy("DEV-SEED");
-        complaintRepo.save(c);
+        maidComplaintRepo.save(c);
     }
 
     /** Seed a couple of sample helper tags (idempotent — only when table empty). */
@@ -402,6 +419,60 @@ public class DevUserSeeder implements ApplicationRunner {
         t.setStatus(status);
         t.setCreatedBy("DEV-SEED");
         helperTagRepo.save(t);
+    }
+
+    // ─── Sample ops complaints (incoming branch: ops_complaint + /complaints) ──
+
+    /**
+     * Seed a few operational complaints spanning types/statuses so the Ops mobile
+     * Complaints screen can be tested standalone. area_id/region_id are null →
+     * visible to the GLOBAL-scoped dev accounts. Idempotent via fixed source ids.
+     */
+    private void seedOpsComplaints() {
+        opsComplaint("DEV-C1", "MAID_NO_SHOW", "OPEN", "HIGH",
+                "Maid did not turn up for the scheduled morning slot.",
+                "Anita Rao", "9845012345", "Anita Sharma", "9900010001", "BK-1001");
+        opsComplaint("DEV-C2", "WORK_NOT_DONE", "IN_PROGRESS", "MEDIUM",
+                "Kitchen was not cleaned properly during the last visit.",
+                "Rahul Verma", "9845067890", "Priya Das", "9900010002", "BK-1002");
+        opsComplaint("DEV-C3", "MAID_LATE", "OPEN", "LOW",
+                "Helper consistently arrives 30+ minutes late.",
+                "Meera Iyer", "9845099887", null, null, "BK-1003");
+        opsComplaint("DEV-C4", "DAMAGE", "RESOLVED", "HIGH",
+                "A ceramic dish was broken; resolved with replacement.",
+                "Farah Khan", "9845033221", "Kavita Singh", "9900010003", "BK-1004");
+        opsComplaint("DEV-C5", "BILLING", "CLOSED", "MEDIUM",
+                "Disputed an extra charge on the monthly invoice; refunded.",
+                "Sanjay Gupta", "9845044556", null, null, "BK-1005");
+    }
+
+    private void opsComplaint(String sourceId, String type, String status, String priority, String description,
+                              String customerName, String customerMobile,
+                              String assigneeName, String assigneeMobile, String bookingRef) {
+        if (opsComplaintRepo.findBySourceSystemAndSourceTypeAndSourceIdAndDeletedFalse(
+                "DEV", "SOCIETY_COMPLAINT", sourceId).isPresent()) {
+            return;
+        }
+        OpsComplaint c = new OpsComplaint();
+        c.setReferenceNo("CMP-" + sourceId);
+        c.setSourceSystem("DEV");
+        c.setSourceType("SOCIETY_COMPLAINT");
+        c.setSourceId(sourceId);
+        c.setComplaintType(type);
+        c.setStatus(status);
+        c.setPriority(priority);
+        c.setDescription(description);
+        c.setCustomerName(customerName);
+        c.setCustomerMobile(customerMobile);
+        c.setAssigneeName(assigneeName);
+        c.setAssigneeMobile(assigneeMobile);
+        c.setBookingReference(bookingRef);
+        if ("RESOLVED".equals(status)) c.setResolvedAt(LocalDateTime.now().minusDays(1));
+        if ("CLOSED".equals(status)) {
+            c.setResolvedAt(LocalDateTime.now().minusDays(2));
+            c.setClosedAt(LocalDateTime.now().minusDays(1));
+        }
+        opsComplaintRepo.save(c);
     }
 
     private OpsUser ensureUser(DevAccount acct) {

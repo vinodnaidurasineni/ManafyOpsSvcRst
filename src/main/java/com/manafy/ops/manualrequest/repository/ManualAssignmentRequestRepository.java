@@ -23,6 +23,11 @@ public interface ManualAssignmentRequestRepository extends JpaRepository<ManualA
 
     Page<ManualAssignmentRequest> findByDeletedFalse(Pageable pageable);
 
+    /** Count of non-terminal (open/queued/acked/assigned/in-progress) manual requests. */
+    @Query("SELECT COUNT(r) FROM ManualAssignmentRequest r " +
+           "WHERE r.deleted = false AND r.status NOT IN ('COMPLETED','CANCELLED')")
+    long countOpen();
+
     /**
      * Daily workload for a helper: the number of active (non-terminal) manual
      * requests assigned to the given assignee whose scheduled day is {@code day}.
