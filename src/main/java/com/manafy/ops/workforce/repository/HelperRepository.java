@@ -14,6 +14,8 @@ import com.manafy.ops.workforce.entity.Helper;
 @Repository
 public interface HelperRepository extends JpaRepository<Helper, UUID> {
     Optional<Helper> findByIdAndDeletedFalse(UUID id);
+    /** Resolve a helper by phone — used to link a maid-app login (OpsUser.mobile) to its Helper. */
+    Optional<Helper> findByPhoneAndDeletedFalse(String phone);
     boolean existsByCode(String code);
     Page<Helper> findByDeletedFalse(Pageable pageable);
 

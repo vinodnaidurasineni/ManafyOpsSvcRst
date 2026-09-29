@@ -26,6 +26,16 @@ import com.manafy.ops.manualrequest.entity.ManualAssignmentRequest;
 import com.manafy.ops.manualrequest.repository.ManualAssignmentRequestRepository;
 import com.manafy.ops.workforce.entity.Helper;
 import com.manafy.ops.workforce.repository.HelperRepository;
+import com.manafy.ops.maidapp.entity.Booking;
+import com.manafy.ops.maidapp.entity.BookingAssignment;
+import com.manafy.ops.maidapp.entity.BookingSchedule;
+import com.manafy.ops.maidapp.entity.Complaint;
+import com.manafy.ops.maidapp.entity.HelperTag;
+import com.manafy.ops.maidapp.repository.BookingAssignmentRepository;
+import com.manafy.ops.maidapp.repository.BookingRepository;
+import com.manafy.ops.maidapp.repository.BookingScheduleRepository;
+import com.manafy.ops.maidapp.repository.ComplaintRepository;
+import com.manafy.ops.maidapp.repository.HelperTagRepository;
 
 /**
  * DEV-ONLY seeder. On startup (when {@code manafy.dev-auth.enabled=true}), it
@@ -58,6 +68,15 @@ public class DevUserSeeder implements ApplicationRunner {
             new DevAccount("7000000003", "Dev Area Manager", "AREA_OPERATIONS_MANAGER"),
             new DevAccount("7000000004", "Dev Super Admin", "SUPER_ADMIN"));
 
+    /**
+     * Maid-app dev login accounts. Their mobile == a seeded MAID Helper.phone so
+     * MaidAppController can resolve the maid's workforce id. They get NO ops role
+     * (a maid is not an ops staff persona) — just an authenticated OpsUser.
+     */
+    private static final List<DevAccount> MAID_ACCOUNTS = List.of(
+            new DevAccount("9900010001", "Anita Sharma", null),
+            new DevAccount("9900010002", "Priya Das", null));
+
     public static String subForMobile(String mobile) {
         return "dev-sub-" + mobile;
     }
@@ -71,11 +90,19 @@ public class DevUserSeeder implements ApplicationRunner {
     private final RolePermissionRepository rolePermissionRepo;
     private final ManualAssignmentRequestRepository manualRepo;
     private final HelperRepository helperRepo;
+    private final BookingRepository bookingRepo;
+    private final BookingScheduleRepository scheduleRepo;
+    private final BookingAssignmentRepository assignmentRepo;
+    private final ComplaintRepository complaintRepo;
+    private final HelperTagRepository helperTagRepo;
 
     public DevUserSeeder(DevAuthProperties props, OpsUserRepository userRepo, RoleRepository roleRepo,
                          UserRoleRepository userRoleRepo, UserScopeRepository userScopeRepo,
                          PermissionRepository permissionRepo, RolePermissionRepository rolePermissionRepo,
-                         ManualAssignmentRequestRepository manualRepo, HelperRepository helperRepo) {
+                         ManualAssignmentRequestRepository manualRepo, HelperRepository helperRepo,
+                         BookingRepository bookingRepo, BookingScheduleRepository scheduleRepo,
+                         BookingAssignmentRepository assignmentRepo, ComplaintRepository complaintRepo,
+                         HelperTagRepository helperTagRepo) {
         this.props = props;
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
@@ -85,6 +112,11 @@ public class DevUserSeeder implements ApplicationRunner {
         this.rolePermissionRepo = rolePermissionRepo;
         this.manualRepo = manualRepo;
         this.helperRepo = helperRepo;
+        this.bookingRepo = bookingRepo;
+        this.scheduleRepo = scheduleRepo;
+        this.assignmentRepo = assignmentRepo;
+        this.complaintRepo = complaintRepo;
+        this.helperTagRepo = helperTagRepo;
     }
 
     @Override
@@ -105,6 +137,21 @@ public class DevUserSeeder implements ApplicationRunner {
         seedHelpers();
         seedSampleRequests();
         seedWorkloadRequests();
+
+        // Maid-app login accounts (no ops role). Created after helpers so the
+        // OpsUser.mobile → Helper.phone link resolves in MaidAppController.
+        for (DevAccount maid : MAID_ACCOUNTS) {
+            ensureUser(maid);
+        }
+
+        // Sample maid-app jobs so /maids/me/jobs + /dashboard return data.
+        seedMaidJobs();
+
+        // Sample complaints so the admin complaints screen has data.
+        seedComplaints();
+
+        // Sample helper tags so the admin helper-tags screen has data.
+        seedHelperTags();
 
         log.warn("DEV-AUTH ENABLED: seeded {} local login accounts (mobiles 7000000001..04, OTP={}), "
                 + "helper workforce, and sample requests. This must NEVER be enabled in production.",
@@ -260,6 +307,101 @@ public class DevUserSeeder implements ApplicationRunner {
             r.setAssigneePhone(assigneePhone);
         }
         manualRepo.save(r);
+    }
+
+    /**
+     * Seed a sample maid-app booking + today's schedule + assignment for Anita
+     * (H-MAID-01) so the maid dashboard/jobs are populated. Idempotent via a
+     * fixed booking_number. References the runtime-generated Helper id.
+     */
+    private void seedMaidJobs() {
+        Helper anita = helperRepo.findByCategoryAndDeletedFalse("MAID").stream()
+                .filter(h -> "H-MAID-01".equals(h.getCode())).findFirst().orElse(null);
+        if (anita == null) return;
+
+        String bookingNumber = "MB-DEV-0001";
+        if (bookingRepo.findAll().stream().anyMatch(b -> bookingNumber.equals(b.getBookingNumber()))) {
+            return; // already seeded
+        }
+
+        LocalDate today = LocalDate.now();
+        Booking booking = new Booking();
+        booking.setBookingNumber(bookingNumber);
+        booking.setCustomerId(UUID.randomUUID()); // dev customer (Community owns real customers)
+        booking.setStartDate(today);
+        booking.setEndDate(today.plusMonths(1).minusDays(1));
+        booking.setDurationMonths(1);
+        booking.setBookingStatus("ASSIGNED");
+        booking.setTotalAmount(new BigDecimal("3500"));
+        booking.setBhkType("2BHK");
+        booking.setSelectedTime("06:00 AM - 06:30 AM");
+        booking.setCreatedBy("DEV-SEED");
+        booking = bookingRepo.save(booking);
+
+        BookingSchedule schedule = new BookingSchedule();
+        schedule.setBookingId(booking.getId());
+        schedule.setScheduledDate(today);
+        schedule.setStatus("ASSIGNED");
+        schedule.setServiceName("Recurring Maid");
+        schedule.setApartmentName("Prestige Lakeside");
+        schedule.setTower("A");
+        schedule.setFlatNumber("A-402");
+        schedule.setSlotTime("06:00 AM - 06:30 AM");
+        schedule.setCreatedBy("DEV-SEED");
+        schedule = scheduleRepo.save(schedule);
+
+        BookingAssignment assignment = new BookingAssignment();
+        assignment.setBookingScheduleId(schedule.getId());
+        assignment.setMaidId(anita.getId());
+        assignment.setAssignedAt(LocalDateTime.now());
+        assignment.setAssignedBy("DEV-SEED");
+        assignment.setAssignmentStatus("ASSIGNED");
+        assignment.setCreatedBy("DEV-SEED");
+        assignmentRepo.save(assignment);
+    }
+
+    /** Seed a couple of sample complaints (idempotent by description marker). */
+    private void seedComplaints() {
+        if (!complaintRepo.findByDeletedFalseOrderByCreatedAtDesc().isEmpty()) return;
+        complaint("MAID_NO_SHOW", "OPEN", "Maid did not arrive for the morning slot.",
+                "Anita Rao", "9845012345", "Anita Sharma", "9900010001");
+        complaint("WORK_NOT_DONE", "IN_PROGRESS", "Dishes were left unwashed.",
+                "Rahul Verma", "9845067890", "Priya Das", "9900010002");
+    }
+
+    private void complaint(String type, String status, String desc,
+                           String customerName, String customerMobile, String maidName, String maidMobile) {
+        Complaint c = new Complaint();
+        c.setComplaintType(type);
+        c.setComplaintStatus(status);
+        c.setDescription(desc);
+        c.setCustomerName(customerName);
+        c.setCustomerMobile(customerMobile);
+        c.setMaidName(maidName);
+        c.setMaidMobile(maidMobile);
+        c.setCreatedBy("DEV-SEED");
+        complaintRepo.save(c);
+    }
+
+    /** Seed a couple of sample helper tags (idempotent — only when table empty). */
+    private void seedHelperTags() {
+        if (!helperTagRepo.findByDeletedFalseOrderByCreatedAtDesc().isEmpty()) return;
+        helperTag("Sunita Devi", "9812345670", "Anita Rao", "9845012345", "Prestige Lakeside", "A-402", "PENDING");
+        helperTag("Ramesh Kumar", "9812345671", "Rahul Verma", "9845067890", "Sobha Dream Acres", "B-1203", "CONTACTED");
+    }
+
+    private void helperTag(String helperName, String helperMobile, String customerName,
+                           String customerMobile, String apartmentName, String flatNumber, String status) {
+        HelperTag t = new HelperTag();
+        t.setHelperName(helperName);
+        t.setHelperMobile(helperMobile);
+        t.setCustomerName(customerName);
+        t.setCustomerMobile(customerMobile);
+        t.setApartmentName(apartmentName);
+        t.setFlatNumber(flatNumber);
+        t.setStatus(status);
+        t.setCreatedBy("DEV-SEED");
+        helperTagRepo.save(t);
     }
 
     private OpsUser ensureUser(DevAccount acct) {
