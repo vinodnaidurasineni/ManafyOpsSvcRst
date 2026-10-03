@@ -22,10 +22,14 @@ class ApiConventionsTest {
         assertThat(PageResponse.normalizePage(0)).isEqualTo(1);
         assertThat(PageResponse.normalizePage(3)).isEqualTo(3);
 
-        assertThat(PageResponse.clampPageSize(null)).isEqualTo(25);   // default
-        assertThat(PageResponse.clampPageSize(0)).isEqualTo(25);      // invalid → default
-        assertThat(PageResponse.clampPageSize(50)).isEqualTo(50);     // within range
-        assertThat(PageResponse.clampPageSize(1000)).isEqualTo(100);  // clamped to max
+        // Business rule: list/search APIs never return more than 10 records, so
+        // both the default and the hard max are 10.
+        assertThat(PageResponse.clampPageSize(null)).isEqualTo(10);   // default
+        assertThat(PageResponse.clampPageSize(0)).isEqualTo(10);      // invalid → default
+        assertThat(PageResponse.clampPageSize(5)).isEqualTo(5);       // within range (<=10)
+        assertThat(PageResponse.clampPageSize(10)).isEqualTo(10);     // exactly max
+        assertThat(PageResponse.clampPageSize(20)).isEqualTo(10);     // clamped to max
+        assertThat(PageResponse.clampPageSize(1000)).isEqualTo(10);   // clamped to max
     }
 
     @Test

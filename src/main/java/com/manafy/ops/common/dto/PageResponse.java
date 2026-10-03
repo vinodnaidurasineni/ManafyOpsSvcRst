@@ -8,8 +8,12 @@ import java.util.List;
  */
 public class PageResponse<T> {
 
-    public static final int DEFAULT_PAGE_SIZE = 25;
-    public static final int MAX_PAGE_SIZE = 100;
+    // Business rule: list/search APIs must never return more than 10 records in
+    // a single response. Both the default AND the hard max are 10, so every
+    // paginated endpoint that funnels through clampPageSize() is capped — and a
+    // client requesting pageSize=100 still receives at most 10.
+    public static final int DEFAULT_PAGE_SIZE = 10;
+    public static final int MAX_PAGE_SIZE = 10;
 
     private List<T> data;
     private Meta meta;

@@ -46,12 +46,23 @@ public class DevAuthController {
         if (mobile == null) {
             throw new BusinessException("AUTH_001", "Valid 10-digit mobile required", HttpStatus.BAD_REQUEST);
         }
-        // For dev, we always issue a reference; verify-otp enforces the account exists.
-        String ref = devJwt.otpReference(mobile);
+        // The account MUST already be provisioned here (ops personas + dev accounts).
+        // Rejecting unknown numbers lets the mobile app fall back to the Community
+        // backend for helper/maid logins that live there instead.
+        String sub = DevUserSeeder.subForMobile(mobile);
+        userRepo.findByCognitoSubAndDeletedFalse(sub)
+                .orElseThrow(() -> new BusinessException("AUTH_NO_ACCOUNT",
+                        "No account found for this mobile number", HttpStatus.NOT_FOUND));
+        // Random 6-digit OTP per request (matches the Community app). The OTP is
+        // embedded in the signed reference so verification stays stateless.
+        String otp = String.format("%06d", new java.security.SecureRandom().nextInt(1_000_000));
+        String ref = devJwt.otpReference(mobile, otp);
         Map<String, String> res = new LinkedHashMap<>();
         res.put("otpReferenceId", ref);
-        res.put("message", "Dev OTP for +91" + mobile + " is " + props.getOtp());
-        res.put("devOtp", props.getOtp());
+        res.put("message", "OTP sent to +91" + mobile);
+        // Local-dev convenience: echo the OTP so the app can auto-fill it, exactly
+        // like the Community backend's otp.expose-in-response behaviour.
+        res.put("devOtp", otp);
         return ApiResponse.ok(res);
     }
 
@@ -63,20 +74,28 @@ public class DevAuthController {
         if (mobile == null) {
             throw new BusinessException("AUTH_002", "Invalid or expired OTP reference", HttpStatus.BAD_REQUEST);
         }
-        if (otp == null || !otp.equals(props.getOtp())) {
+        String expected = devJwt.otpFromReference(ref);
+        if (otp == null || expected == null || !otp.equals(expected)) {
             throw new BusinessException("AUTH_006", "Invalid OTP", HttpStatus.UNAUTHORIZED);
         }
 
         String sub = DevUserSeeder.subForMobile(mobile);
         OpsUser user = userRepo.findByCognitoSubAndDeletedFalse(sub)
                 .orElseThrow(() -> new BusinessException("AUTH_NO_ACCOUNT",
-                        "No dev account for this number. Use 7000000001..7000000004.", HttpStatus.UNAUTHORIZED));
+                        "No account found for this mobile number.", HttpStatus.UNAUTHORIZED));
 
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("accessToken", devJwt.accessToken(sub));
         res.put("refreshToken", devJwt.refreshToken(sub));
         res.put("userId", user.getId().toString());
+        res.put("firstName", firstName(user.getDisplayName()));
         return ApiResponse.ok(res);
+    }
+
+    private static String firstName(String displayName) {
+        if (displayName == null || displayName.isBlank()) return "";
+        int i = displayName.trim().indexOf(' ');
+        return i < 0 ? displayName.trim() : displayName.trim().substring(0, i);
     }
 
     @PostMapping("/refresh")

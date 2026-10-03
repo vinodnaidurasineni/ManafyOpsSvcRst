@@ -22,6 +22,8 @@ import com.manafy.ops.common.authz.repository.UserRoleRepository;
 import com.manafy.ops.common.authz.repository.UserScopeRepository;
 import com.manafy.ops.complaint.entity.OpsComplaint;
 import com.manafy.ops.complaint.repository.OpsComplaintRepository;
+import com.manafy.ops.compat.entity.HelperTag;
+import com.manafy.ops.compat.repository.HelperTagRepository;
 import com.manafy.ops.identity.entity.OpsUser;
 import com.manafy.ops.identity.repository.OpsUserRepository;
 import com.manafy.ops.manualrequest.entity.ManualAssignmentRequest;
@@ -64,10 +66,22 @@ public class DevUserSeeder implements ApplicationRunner {
     public record DevAccount(String mobile, String name, String roleCode) {}
 
     private static final List<DevAccount> ACCOUNTS = List.of(
+            // Original ops dev personas (kept working — no "no dev account" error).
             new DevAccount("7000000001", "Dev Field Officer", "FIELD_OFFICER"),
             new DevAccount("7000000002", "Dev Ops Coordinator", "OPERATIONS_COORDINATOR"),
             new DevAccount("7000000003", "Dev Area Manager", "AREA_OPERATIONS_MANAGER"),
-            new DevAccount("7000000004", "Dev Super Admin", "SUPER_ADMIN"));
+            new DevAccount("7000000004", "Dev Super Admin", "SUPER_ADMIN"),
+            // Old ManafyOps management hierarchy (ported from ManafySvcRst
+            // deploy/seed-dev-hierarchy.sql). Mapped to ops roles so they
+            // authenticate here and land on the Ops admin app. Management tiers
+            // get SUPER_ADMIN (full visibility); field/area roles map to the
+            // closest ops operational role.
+            new DevAccount("9999900001", "Vinod Kumar", "SUPER_ADMIN"),            // CEO
+            new DevAccount("9999900002", "Rahul Sharma", "SUPER_ADMIN"),           // COO
+            new DevAccount("9999900003", "Priya Nair", "SUPER_ADMIN"),             // HR
+            new DevAccount("9999900004", "Kiran Reddy", "AREA_OPERATIONS_MANAGER"),// Area Manager
+            new DevAccount("9999900005", "Arun Patel", "OPERATIONS_COORDINATOR"),  // Training Team
+            new DevAccount("9999900006", "Sneha Iyer", "OPERATIONS_COORDINATOR")); // Onboarding Assistant
 
     public static String subForMobile(String mobile) {
         return "dev-sub-" + mobile;
@@ -83,12 +97,13 @@ public class DevUserSeeder implements ApplicationRunner {
     private final ManualAssignmentRequestRepository manualRepo;
     private final HelperRepository helperRepo;
     private final OpsComplaintRepository complaintRepo;
+    private final HelperTagRepository helperTagRepo;
 
     public DevUserSeeder(DevAuthProperties props, OpsUserRepository userRepo, RoleRepository roleRepo,
                          UserRoleRepository userRoleRepo, UserScopeRepository userScopeRepo,
                          PermissionRepository permissionRepo, RolePermissionRepository rolePermissionRepo,
                          ManualAssignmentRequestRepository manualRepo, HelperRepository helperRepo,
-                         OpsComplaintRepository complaintRepo) {
+                         OpsComplaintRepository complaintRepo, HelperTagRepository helperTagRepo) {
         this.props = props;
         this.userRepo = userRepo;
         this.roleRepo = roleRepo;
@@ -99,6 +114,7 @@ public class DevUserSeeder implements ApplicationRunner {
         this.manualRepo = manualRepo;
         this.helperRepo = helperRepo;
         this.complaintRepo = complaintRepo;
+        this.helperTagRepo = helperTagRepo;
     }
 
     @Override
@@ -120,6 +136,7 @@ public class DevUserSeeder implements ApplicationRunner {
         seedSampleRequests();
         seedWorkloadRequests();
         seedComplaints();
+        seedHelperTags();
 
         log.warn("DEV-AUTH ENABLED: seeded {} local login accounts (mobiles 7000000001..04, OTP={}), "
                 + "helper workforce, sample requests, and sample complaints. This must NEVER be enabled in production.",
@@ -329,6 +346,36 @@ public class DevUserSeeder implements ApplicationRunner {
             c.setClosedAt(LocalDateTime.now().minusDays(1));
         }
         complaintRepo.save(c);
+    }
+
+    // ─── Sample helper-tag leads (so the admin Helper Tags screen isn't empty) ──
+
+    /**
+     * Seed a few helper-tag leads spanning statuses so the ported ManafyOps admin
+     * "Helper Tags" screen can be tested standalone. Idempotent: only seeds when the
+     * table is empty (fixed helper mobiles double as the natural dedupe signal).
+     */
+    private void seedHelperTags() {
+        if (helperTagRepo.count() > 0) return;
+        helperTag("Lakshmi Bai", "9812300001", "MAID", "A-402", "Prestige Lakeside", "Anita Rao", "9845012345", "PENDING");
+        helperTag("Ramu Cook", "9812300002", "COOK", "B-1203", "Sobha Dream Acres", "Rahul Verma", "9845067890", "CONTACTED");
+        helperTag("Shanti Devi", "9812300003", "MAID", "C-77", "Brigade Gateway", "Meera Iyer", "9845099887", "PENDING");
+        helperTag("Gopal Driver", "9812300004", "DRIVER", "D-9", "Purva Highland", "Farah Khan", "9845033221", "ONBOARDED");
+        helperTag("Old Helper", "9812300005", "MAID", "E-5", "Mantri Espana", "Sanjay Gupta", "9845044556", "DISMISSED");
+    }
+
+    private void helperTag(String helperName, String helperMobile, String helperType, String flat,
+                           String apartmentName, String customerName, String customerMobile, String status) {
+        HelperTag t = new HelperTag();
+        t.setHelperName(helperName);
+        t.setHelperMobile(helperMobile);
+        t.setHelperType(helperType);
+        t.setFlatNumber(flat);
+        t.setApartmentName(apartmentName);
+        t.setCustomerName(customerName);
+        t.setCustomerMobile(customerMobile);
+        t.setStatus(status);
+        helperTagRepo.save(t);
     }
 
     private OpsUser ensureUser(DevAccount acct) {

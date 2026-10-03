@@ -81,8 +81,13 @@ public class DevJwtService {
         }
     }
 
-    /** Mint a short-lived OTP reference token that embeds the target mobile. */
-    public String otpReference(String mobile) {
+    /**
+     * Mint a short-lived OTP reference token that embeds the target mobile AND
+     * the (random) OTP that was issued for it. Keeping the OTP inside the signed
+     * reference lets verification stay stateless (no OTP table) while still using
+     * a fresh random code per request — matching the Community app's behaviour.
+     */
+    public String otpReference(String mobile, String otp) {
         try {
             Instant now = Instant.now();
             JWTClaimsSet claims = new JWTClaimsSet.Builder()
@@ -92,6 +97,7 @@ public class DevJwtService {
                     .expirationTime(Date.from(now.plusSeconds(300))) // 5 min
                     .jwtID(UUID.randomUUID().toString())
                     .claim("token_use", "otpref")
+                    .claim("otp", otp)
                     .build();
             SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claims);
             jwt.sign(new MACSigner(secretBytes()));
@@ -112,6 +118,22 @@ public class DevJwtService {
             Date exp = claims.getExpirationTime();
             if (exp == null || exp.before(new Date())) return null;
             return claims.getSubject();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Extract the OTP embedded in a valid reference token, or null. */
+    public String otpFromReference(String ref) {
+        try {
+            SignedJWT jwt = SignedJWT.parse(ref);
+            if (!jwt.verify(new MACVerifier(secretBytes()))) return null;
+            JWTClaimsSet claims = jwt.getJWTClaimsSet();
+            if (!ISSUER.equals(claims.getIssuer())) return null;
+            if (!"otpref".equals(claims.getStringClaim("token_use"))) return null;
+            Date exp = claims.getExpirationTime();
+            if (exp == null || exp.before(new Date())) return null;
+            return claims.getStringClaim("otp");
         } catch (Exception e) {
             return null;
         }
